@@ -4,6 +4,7 @@ const db = require('./pgsql/database')
 const cors = require('cors')
 const jwt = require('jsonwebtoken')
 const appKey = 'DFAAdjfsjadGSDFGsd'
+var ids = 56
 
 app.set('view engine', 'ejs')
 app.use(express.json());
@@ -27,24 +28,59 @@ function checkToken(req, res, next){
 
 app.post('/signup', async function(req, res){
     const body = req.body
-    await db.connect()
+    //await db.connect()
     try{
-        await db.query(`INSERT INTO "users" VALUES (2, '${body.name}', '${body.login}', '${body.email}', '${body.address}', '${body.password}', false, '2023-10-15');`)
+        await db.query(`INSERT INTO "users" VALUES ('${++ids}', '${body.name}', '${body.login}', '${body.email}', '${body.address}', '${body.password}', false, '2023-10-15');`)
     }catch(err){
         await db.end()
         return res.status(401).json({msg: `${err}`})                
     }
-    await db.end()
+    //await db.end()
     return res.status(200).json({msg: 'usuário cadastrado com sucesso!'})
-
 })
+app.post('/newProduct', async function(req, res){
+    const body = req.body
+    //await db.connect()
+    try{
+        await db.query(`INSERT INTO "products" VALUES (${++ids}, '${body.name}', ${body.category}, '${body.description}', '${body.imageUrl}', ${body.qtdeStock}, ${body.price}, '2023-10-15');`)
+    }catch(err){
+        //await db.end()
+        return res.status(401).json({msg: `${err}`})                
+    }
+    //await db.end()
+    return res.status(200).json({msg: 'produto cadastrado com sucesso!'})
+})
+app.post('/newCategory', async function(req, res){
+    const body = req.body
+    //await db.connect()
+    try{
+        await db.query(`INSERT INTO "categories" VALUES ('${++ids}', '${body.name}', '${body.imageUrl}', '2023-10-15');`)
+    }catch(err){
+        //await db.end()
+        return res.status(401).json({msg: `${err}`})                
+    }
+    //await db.end()
+    return res.status(200).json({msg: 'usuário cadastrado com sucesso!'})
+})
+app.post('/newPromotion', async function(req, res){
+    const body = req.body
+    try{
+        await db.query(`INSERT INTO "promotions" VALUES ('${++ids}', '${body.imageUrl}', ${body.repeat}, '${body.beggining}', '${body.closure}' , '2023-10-15', '${body.description}', '${body.name}');`)
+    }catch(err){
+        //await db.end()
+        return res.status(401).json({msg: `${err}`})                
+    }
+    //await db.end()
+    return res.status(200).json({msg: 'usuário cadastrado com sucesso!'})
+})
+
+
+
 app.post('/signin', async function(req, res){
     const body = req.body
-    await db.connect()
     try{
         //faz uma conexão ao banco de dados, procurando uma tupla cujo login seja igual ao user.login e as password seja igual a user.password. Em seguida encerra o bd.
         const user = await db.query(`SELECT "Login", "Password" FROM users u WHERE u."Login" = '${body.login}' AND u."Password" = '${body.password}';`)
-        await db.end()
         if(user.rowCount){
             //se for retornada uma tupla, cria um token usando o jsonwebtoken
             const token = jwt.sign({
@@ -54,10 +90,72 @@ app.post('/signin', async function(req, res){
         }
         else return res.status(404).json({msg: 'senha ou usuário incorreto(s)'})
     }catch(err){
-        await db.end()
         return res.status(401).json({msg: `${err}`})             
     }
 })
+app.post('/getProducts', async function(req, res){
+    try{
+        const result = await db.query(`SELECT * FROM products;`)
+        return res.status(200).json({msg: 'sucesso!', res: result})
+    }catch(err){
+        return res.status(401).json({msg: `${err}`})             
+    }
+})
+app.post('/getCategories', async function(req, res){
+    try{
+        const result = await db.query(`SELECT * FROM categories;`)
+        return res.status(200).json({msg: 'sucesso!', res: result})
+    }catch(err){
+        return res.status(401).json({msg: `${err}`})             
+    }
+})
+app.post('/getPromotions', async function(req, res){
+    try{
+        const result = await db.query(`SELECT * FROM promotions;`)
+        return res.status(200).json({msg: 'sucesso!', res: result})
+    }catch(err){
+        return res.status(401).json({msg: `${err}`})             
+    }
+})
+app.post('/search', async function(req, res){
+    const body = req.body
+    console.log(body)
+    try{
+        const result = await db.query(`SELECT * FROM products p WHERE p."Name" ILIKE '%${body.name}%' or p."Description" ILIKE '%${body.name}%';`)
+        console.log(result)
+        return res.status(200).json({msg: 'sucesso!', res: result})
+    }catch(err){
+        return res.status(401).json({msg: `${err}`})             
+    }
+})
+app.post('/catchProduct', async function(req, res){
+    const body = req.body
+    try{
+        const product = await db.query(`SELECT * FROM products p WHERE p."ID" = '${body.id}'`)
+        return res.status(200).json({msg: 'sucesso!', res: product})
+    }catch(err){
+        return res.status(401).json({msg: `${err}`})
+    }
+})
+
+
+db.connect()
+
+process.on('SIGINT', () => {
+  db.end()
+    .then(() => {
+      console.log('Conexão com o banco de dados encerrada');
+      process.exit(0);
+    })
+    .catch((error) => {
+      console.error('Erro ao encerrar a conexão com o banco de dados:', error);
+      process.exit(1);
+    });
+});
+
+
+
+
 
 app.listen(8080)
 console.log('server is on!')
