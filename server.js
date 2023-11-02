@@ -38,6 +38,25 @@ app.post('/signup', async function(req, res){
     //await db.end()
     return res.status(200).json({msg: 'usuário cadastrado com sucesso!'})
 })
+app.post('/signin', async function(req, res){
+    const body = req.body
+    try{
+        //faz uma conexão ao banco de dados, procurando uma tupla cujo login seja igual ao user.login e as password seja igual a user.password. Em seguida encerra o bd.
+        const user = await db.query(`SELECT "Login", "Password" FROM users u WHERE u."Login" = '${body.login}' AND u."Password" = '${body.password}';`)
+        if(user.rowCount){
+            //se for retornada uma tupla, cria um token usando o jsonwebtoken
+            const token = jwt.sign({
+                id: body.login
+            }, appKey)
+            return res.status(200).json({msg: 'sucesso!', token: token})
+        }
+        else return res.status(404).json({msg: 'senha ou usuário incorreto(s)'})
+    }catch(err){
+        return res.status(401).json({msg: `${err}`})             
+    }
+})
+
+
 app.post('/newProduct', async function(req, res){
     const body = req.body
     //await db.connect()
@@ -76,23 +95,7 @@ app.post('/newPromotion', async function(req, res){
 
 
 
-app.post('/signin', async function(req, res){
-    const body = req.body
-    try{
-        //faz uma conexão ao banco de dados, procurando uma tupla cujo login seja igual ao user.login e as password seja igual a user.password. Em seguida encerra o bd.
-        const user = await db.query(`SELECT "Login", "Password" FROM users u WHERE u."Login" = '${body.login}' AND u."Password" = '${body.password}';`)
-        if(user.rowCount){
-            //se for retornada uma tupla, cria um token usando o jsonwebtoken
-            const token = jwt.sign({
-                id: body.login
-            }, appKey)
-            return res.status(200).json({msg: 'sucesso!', token: token})
-        }
-        else return res.status(404).json({msg: 'senha ou usuário incorreto(s)'})
-    }catch(err){
-        return res.status(401).json({msg: `${err}`})             
-    }
-})
+
 app.post('/getProducts', async function(req, res){
     try{
         const result = await db.query(`SELECT * FROM products;`)
@@ -137,6 +140,61 @@ app.post('/catchProduct', async function(req, res){
         return res.status(401).json({msg: `${err}`})
     }
 })
+
+app.post('/delProduct', async function(req, res){
+    const body = req.body
+    console.log(body)
+    try{
+        const result = await db.query(`DELETE FROM products p WHERE p."ID" = ${body.ID};`)
+        return res.status(200).json({msg: 'deletado com sucesso!', res: result})
+    }catch(err){
+        return res.status(401).json({msg: `${err}`})             
+    }
+})
+app.post('/delCategory', async function(req, res){
+    const body = req.body
+    try{
+        const result = await db.query(`DELETE FROM categories c WHERE c."ID" = ${body.ID};`)
+        return res.status(200).json({msg: 'deletado sucesso!', res: result})
+    }catch(err){
+        return res.status(401).json({msg: `${err}`})             
+    }
+})
+app.post('/delPromotion', async function(req, res){
+    const body = req.body
+    try{
+        const result = await db.query(`DELETE * FROM promotions p WHERE p."ID" = ${body.ID};`)
+        return res.status(200).json({msg: 'deletado com sucesso!', res: result})
+    }catch(err){
+        return res.status(401).json({msg: `${err}`})             
+    }
+})
+
+app.put('/updProduct', async function(req, res){
+    const body = req.body
+    try{
+        const result = await db.query(`UPDATE products p
+        SET "Name" = ${body.name}, "Image" = ${body.imgUrl}, "Price" = ${body.price}, "Category" = ${body.category} , "qtde_Stock" = ${body.stock}, "Description" = ${body.description}
+        WHERE p."ID" = ${body.ID}
+        `)
+        return res.status(200).json({msg: 'produto atualizado com sucesso!', res: result})
+    }catch(err){
+        return res.status(401).json({msg: `${err}`})
+    }
+})
+app.put('/updCategory', async function(req, res){
+    const body = req.body
+    try{
+        const result = await db.query(`UPDATE categories c
+        SET "Name" = ${body.name}, "Image" = ${body.imgUrl}
+        WHERE c."ID" = ${body.ID}
+        `)
+        return res.status(200).json({msg: 'categoria atualizada com sucesso!', res: result})
+    }catch(err){
+        return res.status(401).json({msg: `${err}`})
+    }
+})
+
 
 
 db.connect()
