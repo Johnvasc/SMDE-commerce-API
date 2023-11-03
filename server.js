@@ -4,6 +4,8 @@ const db = require('./pgsql/database')
 const cors = require('cors')
 const jwt = require('jsonwebtoken')
 const appKey = 'DFAAdjfsjadGSDFGsd'
+const admKey = 'JndafnHDDSIKdifajdasD'
+///import {checksUserExists} from "./script"
 var ids = 56
 
 app.set('view engine', 'ejs')
@@ -14,9 +16,18 @@ app.use(cors({
     
 }))
 
+async function checksUserExists(userName){
+    try{
+        const user = await db.query(`SELECT "Login" FROM users u WHERE u."Login" = '${userName}';`)
+        if(user.rowCount) return true
+        return false
+    }catch(err){
+        return false             
+    }
+}
 function checkToken(req, res, next){
     const authHeader = req.headers['authorization']
-    const token = authHeader && authHeader.split("  ")[1]
+    const token = authHeader && authHeader.split(" ")[1]
     if(!token) return res.status(401).json({msg: 'acesso negado!'})
     try{
         jwt.verify(token, appKey)
@@ -25,6 +36,30 @@ function checkToken(req, res, next){
         res.status(400).json({msg: 'erro inesperado!'})
     }
 }
+function checkTokenAdm(req, res, next){
+    const authHeader = req.headers['authorization']
+    const token = authHeader && authHeader.split(" ")[1]
+    if(!token) return res.status(401).json({msg: 'acesso negado!'})
+    try{
+        jwt.verify(token, admKey)
+        next()
+    }catch(error){
+        res.status(400).json({msg: 'erro inesperado!'})
+    }
+}
+
+app.get('/teste', async function(req, res){
+    try{
+        const product = await db.query(`SELECT * FROM users u WHERE u."Login" = 'admin';`)
+        console.log(product.command)
+        return res.status(200).json({msg: `${product}`})
+    }catch(err){
+        return res.status(401).json({msg: `${err}`})
+    }
+})
+app.get('/checkAdmin', checkTokenAdm, async function(req, res){
+    return res.status(200).json({msg: 'ok!'})
+})
 
 app.post('/signup', async function(req, res){
     const body = req.body
@@ -42,22 +77,32 @@ app.post('/signin', async function(req, res){
     const body = req.body
     try{
         //faz uma conexão ao banco de dados, procurando uma tupla cujo login seja igual ao user.login e as password seja igual a user.password. Em seguida encerra o bd.
-        const user = await db.query(`SELECT "Login", "Password" FROM users u WHERE u."Login" = '${body.login}' AND u."Password" = '${body.password}';`)
+        const user = await db.query(`SELECT "Login", "Password", "Administrator" FROM users u WHERE u."Login" = '${body.login}' AND u."Password" = '${body.password}';`)
         if(user.rowCount){
             //se for retornada uma tupla, cria um token usando o jsonwebtoken
-            const token = jwt.sign({
-                id: body.login
-            }, appKey)
-            return res.status(200).json({msg: 'sucesso!', token: token})
+            console.log(user.rows[0].Administrator)
+            if(!user.rows[0].Administrator){
+                console.log('entrou no 1')
+                var token = jwt.sign({
+                    id: body.login
+                }, appKey)
+            }else{
+                console.log('entrou no 2')
+                var token = jwt.sign({
+                    id: body.login
+                }, admKey)
+            }
+            return res.status(200).json({msg: 'sucesso!', token: `${token}`})
         }
         else return res.status(404).json({msg: 'senha ou usuário incorreto(s)'})
     }catch(err){
+        console.log(err)
         return res.status(401).json({msg: `${err}`})             
     }
 })
 
 
-app.post('/newProduct', async function(req, res){
+app.post('/newProduct', checkTokenAdm, async function(req, res){
     const body = req.body
     //await db.connect()
     try{
@@ -67,9 +112,9 @@ app.post('/newProduct', async function(req, res){
         return res.status(401).json({msg: `${err}`})                
     }
     //await db.end()
-    return res.status(200).json({msg: 'produto cadastrado com sucesso!'})
+    return res.status(201).json({msg: 'produto cadastrado com sucesso!'})
 })
-app.post('/newCategory', async function(req, res){
+app.post('/newCategory', checkTokenAdm, async function(req, res){
     const body = req.body
     //await db.connect()
     try{
@@ -79,21 +124,17 @@ app.post('/newCategory', async function(req, res){
         return res.status(401).json({msg: `${err}`})                
     }
     //await db.end()
-    return res.status(200).json({msg: 'usuário cadastrado com sucesso!'})
+    return res.status(201).json({msg: 'usuário cadastrado com sucesso!'})
 })
-app.post('/newPromotion', async function(req, res){
+app.post('/newPromotion', checkTokenAdm, async function(req, res){
     const body = req.body
     try{
         await db.query(`INSERT INTO "promotions" VALUES ('${++ids}', '${body.imageUrl}', ${body.repeat}, '${body.beggining}', '${body.closure}' , '2023-10-15', '${body.description}', '${body.name}');`)
+        return res.status(201).json({msg: 'usuário cadastrado com sucesso!'})
     }catch(err){
-        //await db.end()
         return res.status(401).json({msg: `${err}`})                
     }
-    //await db.end()
-    return res.status(200).json({msg: 'usuário cadastrado com sucesso!'})
 })
-
-
 
 
 app.post('/getProducts', async function(req, res){
@@ -120,6 +161,7 @@ app.post('/getPromotions', async function(req, res){
         return res.status(401).json({msg: `${err}`})             
     }
 })
+
 app.post('/search', async function(req, res){
     const body = req.body
     console.log(body)
@@ -131,6 +173,7 @@ app.post('/search', async function(req, res){
         return res.status(401).json({msg: `${err}`})             
     }
 })
+
 app.post('/catchProduct', async function(req, res){
     const body = req.body
     try{
@@ -140,8 +183,18 @@ app.post('/catchProduct', async function(req, res){
         return res.status(401).json({msg: `${err}`})
     }
 })
+app.post('/catchUser', async function(req, res){
+    const body = req.body
+    try{
+        const product = await db.query(`SELECT * FROM users u WHERE u."ID" = '${body.id}'`)
+        return res.status(200).json({msg: 'sucesso!', res: product})
+    }catch(err){
+        return res.status(401).json({msg: `${err}`})
+    }
+})
 
-app.post('/delProduct', async function(req, res){
+
+app.post('/delProduct', checkTokenAdm, async function(req, res){
     const body = req.body
     console.log(body)
     try{
@@ -151,7 +204,7 @@ app.post('/delProduct', async function(req, res){
         return res.status(401).json({msg: `${err}`})             
     }
 })
-app.post('/delCategory', async function(req, res){
+app.post('/delCategory', checkTokenAdm, async function(req, res){
     const body = req.body
     try{
         const result = await db.query(`DELETE FROM categories c WHERE c."ID" = ${body.ID};`)
@@ -160,7 +213,7 @@ app.post('/delCategory', async function(req, res){
         return res.status(401).json({msg: `${err}`})             
     }
 })
-app.post('/delPromotion', async function(req, res){
+app.post('/delPromotion', checkTokenAdm, async function(req, res){
     const body = req.body
     try{
         const result = await db.query(`DELETE * FROM promotions p WHERE p."ID" = ${body.ID};`)
@@ -170,26 +223,43 @@ app.post('/delPromotion', async function(req, res){
     }
 })
 
-app.put('/updProduct', async function(req, res){
+app.put('/updProduct', checkTokenAdm, async function(req, res){
     const body = req.body
     try{
-        const result = await db.query(`UPDATE products p
-        SET "Name" = ${body.name}, "Image" = ${body.imgUrl}, "Price" = ${body.price}, "Category" = ${body.category} , "qtde_Stock" = ${body.stock}, "Description" = ${body.description}
-        WHERE p."ID" = ${body.ID}
+        const result = await db.query(`UPDATE products
+        SET "Name" = '${body.name}', "Image" = '${body.imgUrl}', "Price" = ${body.price}, "Category" = ${body.category} , "qtde_Stock" = ${body.stock}, "Description" = '${body.description}'
+        WHERE "ID" = ${body.ID}
         `)
         return res.status(200).json({msg: 'produto atualizado com sucesso!', res: result})
     }catch(err){
+        console.log(err)
         return res.status(401).json({msg: `${err}`})
     }
 })
-app.put('/updCategory', async function(req, res){
+app.put('/updCategory', checkTokenAdm, async function(req, res){
     const body = req.body
     try{
-        const result = await db.query(`UPDATE categories c
-        SET "Name" = ${body.name}, "Image" = ${body.imgUrl}
-        WHERE c."ID" = ${body.ID}
+        const result = await db.query(`UPDATE categories
+        SET "Name" = '${body.name}', "Image" = '${body.imgUrl}'
+        WHERE "ID" = ${body.ID};
         `)
         return res.status(200).json({msg: 'categoria atualizada com sucesso!', res: result})
+    }catch(err){
+        
+        return res.status(401).json({msg: `${err}`})
+    }
+})
+app.put('/updUser', checkTokenAdm, async function(req, res){
+    const body = req.body
+    try{
+        if(!checksUserExists(body.login)){
+            const result = await db.query(`UPDATE users
+            SET "Name" = '${body.name}', "Login" = '${body.login}, "Email" = '${body.email}, "Address" = '${body.address}', "Password" = '${body.password}'
+            WHERE "ID" = ${body.ID};
+            `)
+            return res.status(200).json({msg: 'categoria atualizada com sucesso!', res: result})
+        }
+        return res.status(401).json({msg: 'esse login já foi utilizado!'})
     }catch(err){
         return res.status(401).json({msg: `${err}`})
     }
