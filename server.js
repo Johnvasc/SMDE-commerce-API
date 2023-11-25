@@ -1,4 +1,5 @@
 const express = require('express')
+const uuid = require('uuid')
 const app = express()
 const db = require('./pgsql/database')
 const cors = require('cors')
@@ -6,7 +7,7 @@ const jwt = require('jsonwebtoken')
 const appKey = 'DFAAdjfsjadGSDFGsd'
 const admKey = 'JndafnHDDSIKdifajdasD'
 ///import {checksUserExists} from "./script"
-var ids = 777
+var ids = 999
 
 app.set('view engine', 'ejs')
 app.use(express.json());
@@ -50,7 +51,7 @@ function checkTokenAdm(req, res, next){
 
 app.get('/teste', async function(req, res){
     try{
-        const twins = await db.query(`SELECT * FROM products`)
+        const twins = await db.query(`SELECT * FROM users u WHERE u."ID" = '1' AND u."Administrator" = true;`)
         return res.status(200).json({msg: 'sucesso!', res: twins})
     }catch(err){
         return res.status(401).json({msg: `${err}`})
@@ -59,6 +60,24 @@ app.get('/teste', async function(req, res){
 app.get('/checkAdmin', checkTokenAdm, async function(req, res){
     return res.status(200).json({msg: 'ok!'})
 })
+app.get('/checkInstanceAdm', async function(req, res){
+    try{
+        const authHeader = req.headers['authorization']
+        const token = authHeader && authHeader.split(" ")[1]
+        if(token){
+            let ID = jwt.decode(token, admKey)
+            ID = ID.id
+            console.log(ID)
+            const user = await db.query(`SELECT * FROM users u WHERE u."ID" = '${ID}' AND u."Administrator" = true;`)
+            console.log(user.rowCount)
+            if(user.rowCount) return res.status(200).json({access: true})
+        }
+        return res.status(200).json({access: false})
+    }catch(err){
+        return res.status(401).json({msg: err})
+    }
+})
+
 
 app.post('/signup', async function(req, res){
     const body = req.body
@@ -159,6 +178,14 @@ app.post('/getPromotions', async function(req, res){
         return res.status(401).json({msg: `${err}`})             
     }
 })
+app.get('/getSales', checkTokenAdm, async function(req, res){
+    try{
+        const result = await db.query(`SELECT u."ID", s."ID" AS "SaleID", s."Products", s."Created_at" AS "Date" FROM users u, sales s WHERE u."ID" = s."Owner";`)
+        return res.status(200).json({msg: 'sucesso!', res: result})
+    }catch(err){
+        return res.status(401).json({msg: `${err}`})             
+    }
+})
 app.get('/getAdm', checkTokenAdm, async function(req, res){
     const authHeader = req.headers['authorization']
     const token = authHeader && authHeader.split(" ")[1]
@@ -216,6 +243,19 @@ app.post('/catchCart', checkToken, async function(req, res){
         const user = await db.query(`SELECT "ID" FROM users u WHERE u."Login" = '${ID.id}'`)
         const cart = await db.query(`SELECT * FROM carts c WHERE c."UserID" = '${user.rows[0].ID}'`)
         return res.status(200).json({msg: 'sucesso!', res: cart})
+    }catch(error){
+        res.status(400).json({msg: 'erro inesperado!'})
+    }
+})
+app.post('/catchSales', checkToken, async function(req, res){
+    const authHeader = req.headers['authorization']
+    const token = authHeader && authHeader.split(" ")[1]
+    if(!token) return res.status(401).json({msg: 'acesso negado!'})
+    try{
+        const ID = jwt.decode(token, appKey)
+        const user = await db.query(`SELECT "ID" FROM users u WHERE u."Login" = '${ID.id}'`)
+        const sales = await db.query(`SELECT * FROM sales s WHERE s."Owner" = '${user.rows[0].ID}'`)
+        return res.status(200).json({msg: 'sucesso!', res: sales})
     }catch(error){
         res.status(400).json({msg: 'erro inesperado!'})
     }
@@ -279,6 +319,15 @@ app.post('/delPromotion', checkTokenAdm, async function(req, res){
         return res.status(401).json({msg: `${err}`})             
     }
 })
+app.post('/delSale', checkTokenAdm, async function(req, res){
+    const body = req.body
+    try{
+        const result = await db.query(`DELETE * FROM sales s WHERE s."Owner" = ${body.ID};`)
+        return res.status(200).json({msg: 'deletado com sucesso!', res: result})
+    }catch(err){
+        return res.status(401).json({msg: `${err}`})             
+    }
+})
 app.post('/delAdm', checkTokenAdm, async function(req, res){
     const authHeader = req.headers['authorization']
     const token = authHeader && authHeader.split(" ")[1]
@@ -308,9 +357,10 @@ app.post('/delUser', checkToken, async function(req, res){
 
 app.put('/updProduct', checkTokenAdm, async function(req, res){
     const body = req.body
+    console.log(body)
     try{
         const result = await db.query(`UPDATE products
-        SET "Name" = '${body.name}', "Image" = '${body.imgUrl}', "Price" = ${body.price}, "Category" = ${body.category} , "qtde_Stock" = ${body.stock}, "Description" = '${body.description}'
+        SET "Name" = '${body.name}', "Image" = '${body.image}', "Price" = ${body.price}, "Category" = ${body.category} , "qtde_Stock" = ${body.stock}, "Description" = '${body.description}'
         WHERE "ID" = ${body.ID}
         `)
         return res.status(200).json({msg: 'produto atualizado com sucesso!', res: result})
@@ -356,6 +406,7 @@ app.put('/updCart', checkToken, async function(req, res){
     if(!token) return res.status(401).json({msg: 'acesso negado!'})
     let ID = jwt.decode(token, appKey)
     ID = ID.id
+    console.log(ID)
     const body = req.body
     try{
         const user = await db.query(`SELECT "ID" FROM users u WHERE u."Login" = '${ID}'`)
@@ -367,7 +418,36 @@ app.put('/updCart', checkToken, async function(req, res){
         WHERE "UserID" = ${user.rows[0].ID};
         `)
         console.log(result)
-        return res.status(200).json({msg: 'categoria atualizada com sucesso!', res: result})
+        return res.status(200).json({msg: 'carrinho atualizado com sucesso!', res: result})
+    }catch(err){
+        
+        return res.status(401).json({msg: `${err}`})
+    }
+})
+app.delete('/removeFromCart', checkToken, async function(req, res){
+    const authHeader = req.headers['authorization']
+    const token = authHeader && authHeader.split(" ")[1]
+    if(!token) return res.status(401).json({msg: 'acesso negado!'})
+    let ID = jwt.decode(token, appKey)
+    ID = ID.id
+    console.log(ID)
+    const body = req.body
+    try{
+        const user = await db.query(`SELECT "ID" FROM users u WHERE u."Login" = '${ID}'`)
+        const cart = await db.query(`SELECT "Products" FROM carts c WHERE c."UserID" = ${user.rows[0].ID}`)
+        let cartAtt = []
+        let prodId = body.product
+        for(let i = 0; i<cart.rows[0].Products.length; i++){
+            if(cart.rows[0].Products[i] != prodId) cartAtt.push(cart.rows[0].Products[i])
+            else prodId = -1
+        }
+        console.log(cartAtt)
+        const result = await db.query(`UPDATE carts
+        SET "Products" = '{${cartAtt}}'
+        WHERE "UserID" = ${user.rows[0].ID};
+        `)
+        console.log(result)
+        return res.status(200).json({msg: 'item removido com sucesso!', res: result})
     }catch(err){
         
         return res.status(401).json({msg: `${err}`})
