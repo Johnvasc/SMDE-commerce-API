@@ -7,7 +7,7 @@ const jwt = require('jsonwebtoken')
 const appKey = 'DFAAdjfsjadGSDFGsd'
 const admKey = 'JndafnHDDSIKdifajdasD'
 ///import {checksUserExists} from "./script"
-var ids = 999
+var ids = 981
 
 app.set('view engine', 'ejs')
 app.use(express.json());
@@ -51,7 +51,7 @@ function checkTokenAdm(req, res, next){
 
 app.get('/teste', async function(req, res){
     try{
-        const twins = await db.query(`SELECT * FROM users u WHERE u."ID" = '1' AND u."Administrator" = true;`)
+        const twins = await db.query(`SELECT * FROM sales`)
         return res.status(200).json({msg: 'sucesso!', res: twins})
     }catch(err){
         return res.status(401).json({msg: `${err}`})
@@ -67,9 +67,7 @@ app.get('/checkInstanceAdm', async function(req, res){
         if(token){
             let ID = jwt.decode(token, admKey)
             ID = ID.id
-            console.log(ID)
             const user = await db.query(`SELECT * FROM users u WHERE u."ID" = '${ID}' AND u."Administrator" = true;`)
-            console.log(user.rowCount)
             if(user.rowCount) return res.status(200).json({access: true})
         }
         return res.status(200).json({access: false})
@@ -100,7 +98,6 @@ app.post('/signin', async function(req, res){
         const user = await db.query(`SELECT "Login", "Password", "Administrator" FROM users u WHERE u."Login" = '${body.login}' AND u."Password" = '${body.password}';`)
         if(user.rowCount){
             //se for retornada uma tupla, cria um token usando o jsonwebtoken
-            console.log(user.rows[0].Administrator)
             if(!user.rows[0].Administrator){
                 var token = jwt.sign({
                     id: body.login
@@ -114,7 +111,6 @@ app.post('/signin', async function(req, res){
         }
         else return res.status(404).json({msg: 'senha ou usuário incorreto(s)'})
     }catch(err){
-        console.log(err)
         return res.status(401).json({msg: `${err}`})             
     }
 })
@@ -192,7 +188,6 @@ app.get('/getAdm', checkTokenAdm, async function(req, res){
     if(!token) return res.status(401).json({msg: 'acesso negado!'})
     try{
         const ID = jwt.decode(token, admKey)
-        console.log(ID.id)
         const result = await db.query(`SELECT * FROM users u WHERE u."Login" = '${ID.id}';`)
         return res.status(200).json({msg: 'sucesso!', res: result})
     }catch(err){
@@ -205,7 +200,6 @@ app.get('/getUser', checkToken, async function(req, res){
     if(!token) return res.status(401).json({msg: 'acesso negado!'})
     try{
         const ID = jwt.decode(token, appKey)
-        console.log(ID.id)
         const result = await db.query(`SELECT * FROM users u WHERE u."Login" = '${ID.id}';`)
         return res.status(200).json({msg: 'sucesso!', res: result})
     }catch(err){
@@ -215,10 +209,8 @@ app.get('/getUser', checkToken, async function(req, res){
 
 app.post('/search', async function(req, res){
     const body = req.body
-    console.log(body)
     try{
         const result = await db.query(`SELECT * FROM products p WHERE p."Name" ILIKE '%${body.name}%' or p."Description" ILIKE '%${body.name}%';`)
-        console.log(result)
         return res.status(200).json({msg: 'sucesso!', res: result})
     }catch(err){
         return res.status(401).json({msg: `${err}`})             
@@ -265,23 +257,25 @@ app.post('/makeSale', checkToken, async function(req, res){
     const token = authHeader && authHeader.split(" ")[1]
     if(!token) return res.status(401).json({msg: 'acesso negado!'})
     try{
-        let newSales
+        ///recupera o ID do usuário
         let ID = jwt.decode(token, appKey)
         ID = ID.id
         const user = await db.query(`SELECT * FROM users u WHERE u."Login" = '${ID}'`)
         ID = user.rows[0].ID
+
+        ///recupera o carrinho do usuário e insere na nova compra
         const cart = await db.query(`SELECT * FROM carts c WHERE c."UserID" = '${ID}'`)
-        const sales = await db.query(`SELECT * FROM sales s WHERE s."Owner" = '${ID}'`)
-        if(sales) newSales = sales.rows[0].Products.concat(cart.rows[0].Products)
-        else newSales = cart.rows[0].Products
-        const upd = await db.query(`UPDATE sales SET "Products" = '{${newSales}}' WHERE "ID" = '${sales.rows[0].ID}';`)
-        for(let i=0; i<newSales.length; i++){
-            let prod = await db.query(`SELECT * FROM products p WHERE p."ID" = ${newSales[i]}`)
+        
+        
+        ///diminui em 1 o estoque para cada item no carrinho e somo o valor do preço do produto
+        let totalValue = 0
+        for(let i=0; i<cart.rows[0].Products.length; i++){
+            let prod = await db.query(`SELECT * FROM products p WHERE p."ID" = ${cart.rows[0].Products[i]}`)
+            totalValue += parseFloat(prod.rows[0].Price)
             await db.query(`UPDATE products SET "qtde_Stock" = '${prod.rows[0].qtde_Stock - 1}' WHERE "ID" = '${prod.rows[0].ID}'`)
         }
-        console.log(cart.rows[0].ID)
+        const upd = await db.query(`INSERT INTO sales VALUES ('${++ids}', '${ID}', '{${cart.rows[0].Products}}', '${totalValue}', '2023-10-15');`)
         const exc = await db.query(`UPDATE carts c SET "Products" = '{}' WHERE c."UserID" = ${cart.rows[0].UserID};`)
-        console.log(exc)    
         
         return res.status(200).json({msg: 'sucesso!', res: upd})
     }catch(error){
@@ -293,7 +287,6 @@ app.post('/makeSale', checkToken, async function(req, res){
 
 app.post('/delProduct', checkTokenAdm, async function(req, res){
     const body = req.body
-    console.log(body)
     try{
         const result = await db.query(`DELETE FROM products p WHERE p."ID" = ${body.ID};`)
         return res.status(200).json({msg: 'deletado com sucesso!', res: result})
@@ -319,12 +312,13 @@ app.post('/delPromotion', checkTokenAdm, async function(req, res){
         return res.status(401).json({msg: `${err}`})             
     }
 })
-app.post('/delSale', checkTokenAdm, async function(req, res){
+app.delete('/delSale', checkTokenAdm, async function(req, res){
     const body = req.body
     try{
-        const result = await db.query(`DELETE * FROM sales s WHERE s."Owner" = ${body.ID};`)
+        const result = await db.query(`DELETE FROM sales s WHERE s."Owner" = ${body.ID};`)
         return res.status(200).json({msg: 'deletado com sucesso!', res: result})
     }catch(err){
+        console.log(err)
         return res.status(401).json({msg: `${err}`})             
     }
 })
@@ -334,7 +328,6 @@ app.post('/delAdm', checkTokenAdm, async function(req, res){
     if(!token) return res.status(401).json({msg: 'acesso negado!'})
     try{
         const ID = jwt.decode(token, admKey)
-        console.log(ID.id)
         const result = await db.query(`DELETE * FROM users u WHERE u."Login" = '${ID.id}';`)
         return res.status(200).json({msg: 'sucesso!', res: result})
     }catch(err){
@@ -347,7 +340,6 @@ app.post('/delUser', checkToken, async function(req, res){
     if(!token) return res.status(401).json({msg: 'acesso negado!'})
     try{
         const ID = jwt.decode(token, appKey)
-        console.log(ID.id)
         const result = await db.query(`DELETE * FROM users u WHERE u."Login" = '${ID.id}';`)
         return res.status(200).json({msg: 'sucesso!', res: result})
     }catch(err){
@@ -357,7 +349,6 @@ app.post('/delUser', checkToken, async function(req, res){
 
 app.put('/updProduct', checkTokenAdm, async function(req, res){
     const body = req.body
-    console.log(body)
     try{
         const result = await db.query(`UPDATE products
         SET "Name" = '${body.name}', "Image" = '${body.image}', "Price" = ${body.price}, "Category" = ${body.category} , "qtde_Stock" = ${body.stock}, "Description" = '${body.description}'
@@ -365,7 +356,7 @@ app.put('/updProduct', checkTokenAdm, async function(req, res){
         `)
         return res.status(200).json({msg: 'produto atualizado com sucesso!', res: result})
     }catch(err){
-        console.log(err)
+
         return res.status(401).json({msg: `${err}`})
     }
 })
@@ -399,6 +390,23 @@ app.put('/updAdm', checkTokenAdm, async function(req, res){
         return res.status(401).json({msg: `${err}`})
     }
 })
+app.put('/updUser', checkToken, async function(req, res){
+    const body = req.body
+    try{
+        const twins = await db.query(`SELECT * FROM users u WHERE u."ID" != '${body.ID}'`)
+        for(let i = 0; i<twins.rows.length; i++){
+            if(twins.rows[i].Login == body.login) return res.status(400).json({msg: 'esse username já esta sendo utilizado!'})
+            if(twins.rows[i].Email == body.email) return res.status(400).json({msg: 'esse email já esta sendo utilizado!'})
+        }
+        const result = await db.query(`UPDATE users
+        SET "Name" = '${body.name}', "Login" = '${body.login}', "Email" = '${body.email}', "Password" = '${body.password}'
+        WHERE "ID" = ${body.ID};
+        `)
+        return res.status(200).json({msg: 'cliente atualizado com sucesso!', res: result})
+    }catch(err){
+        return res.status(401).json({msg: `${err}`})
+    }
+})
 
 app.put('/updCart', checkToken, async function(req, res){
     const authHeader = req.headers['authorization']
@@ -406,18 +414,15 @@ app.put('/updCart', checkToken, async function(req, res){
     if(!token) return res.status(401).json({msg: 'acesso negado!'})
     let ID = jwt.decode(token, appKey)
     ID = ID.id
-    console.log(ID)
     const body = req.body
     try{
         const user = await db.query(`SELECT "ID" FROM users u WHERE u."Login" = '${ID}'`)
         const cart = await db.query(`SELECT "Products" FROM carts c WHERE c."UserID" = ${user.rows[0].ID}`)
         let cartAtt = cart.rows[0].Products.concat(body.product)
-        console.log(cartAtt)
         const result = await db.query(`UPDATE carts
         SET "Products" = '{${cartAtt}}'
         WHERE "UserID" = ${user.rows[0].ID};
         `)
-        console.log(result)
         return res.status(200).json({msg: 'carrinho atualizado com sucesso!', res: result})
     }catch(err){
         
@@ -430,7 +435,6 @@ app.delete('/removeFromCart', checkToken, async function(req, res){
     if(!token) return res.status(401).json({msg: 'acesso negado!'})
     let ID = jwt.decode(token, appKey)
     ID = ID.id
-    console.log(ID)
     const body = req.body
     try{
         const user = await db.query(`SELECT "ID" FROM users u WHERE u."Login" = '${ID}'`)
@@ -441,12 +445,10 @@ app.delete('/removeFromCart', checkToken, async function(req, res){
             if(cart.rows[0].Products[i] != prodId) cartAtt.push(cart.rows[0].Products[i])
             else prodId = -1
         }
-        console.log(cartAtt)
         const result = await db.query(`UPDATE carts
         SET "Products" = '{${cartAtt}}'
         WHERE "UserID" = ${user.rows[0].ID};
         `)
-        console.log(result)
         return res.status(200).json({msg: 'item removido com sucesso!', res: result})
     }catch(err){
         
