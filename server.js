@@ -54,8 +54,12 @@ function checkTokenAdm(req, res, next){
 
 app.get('/teste', async function(req, res){
     try{
-        const twins = await db.query(`SELECT * FROM sales`)
-        return res.status(200).json({msg: 'sucesso!', res: twins})
+        const sales = await db.query(`SELECT * FROM sales s;`)
+        const products = await db.query('SELECT * FROM products p;')
+        const users = await db.query('SELECT "ID", "Name" FROM users u;')
+        const totalValue = await db.query('SELECT SUM("Value") AS totalValue FROM sales s;')
+        const result = [sales, products, users, totalValue]
+        return res.status(200).json({msg: 'sucesso!', res: result})
     }catch(err){
         return res.status(401).json({msg: `${err}`})
     }
@@ -209,7 +213,19 @@ app.get('/getUser', checkToken, async function(req, res){
         return res.status(401).json({msg: `${err}`})             
     }
 })
-
+app.get('/getFileInfo', checkTokenAdm, async function(req,res){
+    try{
+        const sales = await db.query(`SELECT * FROM sales s;`)
+        const products = await db.query('SELECT * FROM products p;')
+        const users = await db.query('SELECT "ID", "Name" FROM users u;')
+        const totalValue = await db.query('SELECT SUM("Value") AS totalValue FROM sales s;')
+        const result = [sales, products, users, totalValue]
+        return res.status(200).json({msg: 'sucesso!', res: result})
+    }catch(err){
+        console.log(err)
+        return res.status(401).json({msg: `${err}`}) 
+    }
+})
 app.post('/search', async function(req, res){
     const body = req.body
     try{
@@ -219,6 +235,7 @@ app.post('/search', async function(req, res){
         return res.status(401).json({msg: `${err}`})             
     }
 })
+
 
 app.post('/catchProduct', async function(req, res){
     const body = req.body
