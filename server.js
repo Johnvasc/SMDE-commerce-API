@@ -7,7 +7,10 @@ const jwt = require('jsonwebtoken')
 const appKey = 'DFAAdjfsjadGSDFGsd'
 const admKey = 'JndafnHDDSIKdifajdasD'
 ///import {checksUserExists} from "./script"
-var ids = 981
+var ids = Math.floor(Math.random() * 100000)
+const dateAct = new Date()
+const dateFormat = { year: 'numeric', month: 'long', day: 'numeric' }
+const dateStan = dateAct.toLocaleDateString('pt-BR', dateFormat)
 
 app.set('view engine', 'ejs')
 app.use(express.json());
@@ -285,7 +288,7 @@ app.post('/makeSale', checkToken, async function(req, res){
 })
 
 
-app.post('/delProduct', checkTokenAdm, async function(req, res){
+app.delete('/delProduct', checkTokenAdm, async function(req, res){
     const body = req.body
     try{
         const result = await db.query(`DELETE FROM products p WHERE p."ID" = ${body.ID};`)
@@ -294,7 +297,7 @@ app.post('/delProduct', checkTokenAdm, async function(req, res){
         return res.status(401).json({msg: `${err}`})             
     }
 })
-app.post('/delCategory', checkTokenAdm, async function(req, res){
+app.delete('/delCategory', checkTokenAdm, async function(req, res){
     const body = req.body
     try{
         const result = await db.query(`DELETE FROM categories c WHERE c."ID" = ${body.ID};`)
@@ -303,10 +306,10 @@ app.post('/delCategory', checkTokenAdm, async function(req, res){
         return res.status(401).json({msg: `${err}`})             
     }
 })
-app.post('/delPromotion', checkTokenAdm, async function(req, res){
+app.delete('/delPromotion', checkTokenAdm, async function(req, res){
     const body = req.body
     try{
-        const result = await db.query(`DELETE * FROM promotions p WHERE p."ID" = ${body.ID};`)
+        const result = await db.query(`DELETE FROM promotions p WHERE p."ID" = ${body.ID};`)
         return res.status(200).json({msg: 'deletado com sucesso!', res: result})
     }catch(err){
         return res.status(401).json({msg: `${err}`})             
@@ -315,32 +318,32 @@ app.post('/delPromotion', checkTokenAdm, async function(req, res){
 app.delete('/delSale', checkTokenAdm, async function(req, res){
     const body = req.body
     try{
-        const result = await db.query(`DELETE FROM sales s WHERE s."Owner" = ${body.ID};`)
+        const result = await db.query(`DELETE FROM sales s WHERE s."ID" = ${body.ID};`)
         return res.status(200).json({msg: 'deletado com sucesso!', res: result})
     }catch(err){
         console.log(err)
         return res.status(401).json({msg: `${err}`})             
     }
 })
-app.post('/delAdm', checkTokenAdm, async function(req, res){
+app.delete('/delAdm', checkTokenAdm, async function(req, res){
     const authHeader = req.headers['authorization']
     const token = authHeader && authHeader.split(" ")[1]
     if(!token) return res.status(401).json({msg: 'acesso negado!'})
     try{
         const ID = jwt.decode(token, admKey)
-        const result = await db.query(`DELETE * FROM users u WHERE u."Login" = '${ID.id}';`)
+        const result = await db.query(`DELETE FROM users u WHERE u."Login" = '${ID.id}';`)
         return res.status(200).json({msg: 'sucesso!', res: result})
     }catch(err){
         return res.status(401).json({msg: `${err}`})             
     }
 })
-app.post('/delUser', checkToken, async function(req, res){
+app.delete('/delUser', checkToken, async function(req, res){
     const authHeader = req.headers['authorization']
     const token = authHeader && authHeader.split(" ")[1]
     if(!token) return res.status(401).json({msg: 'acesso negado!'})
     try{
         const ID = jwt.decode(token, appKey)
-        const result = await db.query(`DELETE * FROM users u WHERE u."Login" = '${ID.id}';`)
+        const result = await db.query(`DELETE FROM users u WHERE u."Login" = '${ID.id}';`)
         return res.status(200).json({msg: 'sucesso!', res: result})
     }catch(err){
         return res.status(401).json({msg: `${err}`})             
